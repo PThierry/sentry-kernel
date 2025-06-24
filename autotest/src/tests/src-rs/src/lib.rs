@@ -4,20 +4,34 @@
 #![no_std]
 #![no_main]
 
+#[cfg(CONFIG_TEST_DEVICES)]
 mod devices_dt;
+#[cfg(CONFIG_TEST_DEVICES)]
 mod devices_utils;
+#[cfg(CONFIG_TEST_CYCLES)]
 mod test_cycles;
+#[cfg(CONFIG_TEST_DMA)]
 mod test_dma;
+#[cfg(CONFIG_TEST_IPC)]
 mod test_ipc;
+#[cfg(CONFIG_TEST_IRQ)]
 mod test_irq;
 mod test_log;
+#[cfg(CONFIG_TEST_DEVICES)]
 mod test_map;
+#[cfg(CONFIG_TEST_RANDOM)]
 mod test_random;
+#[cfg(all(CONFIG_TEST_SHM,CONFIG_TEST_DEVICES))]
 mod test_shm;
+#[cfg(CONFIG_TEST_SIGNALS)]
 mod test_signal;
+#[cfg(CONFIG_TEST_SLEEP)]
 mod test_sleep;
+#[cfg(CONFIG_TEST_YIELD)]
 mod test_yield;
+#[cfg(CONFIG_TEST_GPIO)]
 mod test_gpio;
+
 use kconfig;
 
 #[unsafe(no_mangle)]
@@ -34,7 +48,7 @@ pub fn autotest() {
     test_random::test_random();
     #[cfg(CONFIG_TEST_SIGNALS)]
     test_signal::test_signal();
-    #[cfg(CONFIG_TEST_SHM)]
+    #[cfg(all(CONFIG_TEST_SHM,CONFIG_TEST_DEVICES))]
     test_shm::test_shm();
     #[cfg(CONFIG_TEST_SLEEP)]
     test_sleep::test_sleep();
@@ -47,4 +61,3 @@ pub fn autotest() {
     #[cfg(CONFIG_TEST_GPIO)]
     test_gpio::test_gpio();
 }
-

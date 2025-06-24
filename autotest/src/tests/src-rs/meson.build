@@ -46,7 +46,7 @@ autotest_test_lib = static_library('testlib_rust',
     rust_abi: 'c',
     rust_args: [
         global_rust_build_args,
-        '--extern', 'sentry_uapi=' + uapi_lib.full_path(),
+        '--extern', 'sentry_uapi=' + uapi_rlib.full_path(),
         '--extern', 'kconfig=' + meson.source_root() / 'subprojects' / 'kconfig' / 'rust' / 'kconfig',
         '--extern', 'kconfig_import=' + meson.source_root() / 'subprojects' / 'kconfig' / 'rust' / 'kconfig_import',
     ],
