@@ -253,3 +253,129 @@ election time, it is considered as a fault.
 .. note::
 
   To avoid differenciation between fully synchronous and asynchronous syscalls, all of them use this very same pattern
+
+TDM hierarchical scheduler
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+About TDM scheduling policy
+"""""""""""""""""""""""""""
+
+Time Division Multiplexing (TDM) introduces a second scheduling level in Sentry:
+
+   * a first level that arbitrates **domains** over time
+   * a second level that schedules **tasks inside the selected domain**
+
+When enabled, TDM allocates a fixed-size time window to each active domain.
+The slot duration is configured with ``CONFIG_SCHED_TDM_WINDOW_TICKS`` and is
+identical for all domains.
+
+TDM does not replace FIFO, RRMQ or RMA. Instead, it wraps the selected base
+policy:
+
+   * TDM+FIFO
+   * TDM+RRMQ
+   * TDM+RMA
+
+In other words, TDM is an inter-domain scheduler, while FIFO/RRMQ/RMA remain
+intra-domain schedulers.
+
+Why TDM in Sentry
+"""""""""""""""""
+
+The main goal is temporal partitioning between domains:
+
+   * each discovered domain gets CPU service in a bounded cadence
+   * one domain cannot monopolize CPU time forever
+   * the scheduling policy inside a domain can still match workload needs
+
+This design provides a practical compromise between isolation and policy
+flexibility in mixed-criticality systems.
+
+Implementation overview in Sentry
+"""""""""""""""""""""""""""""""""
+
+TDM is enabled through Kconfig and sits on top of the generic scheduler API.
+With ``CONFIG_SCHED_TDM=y``, the public ``sched_*`` symbols are bound to the
+TDM implementation.
+
+The TDM core implementation lives in ``kernel/src/sched/sched_domain_tdm.c`` and
+maintains a minimal context:
+
+   * discovered domains list
+   * current domain slot index
+   * tick counter inside current slot
+
+Runtime flow
+""""""""""""
+
+At runtime, the control flow is:
+
+   1. ``sched_init()`` initializes TDM context and calls ``tasks_sched_init()``
+      on the selected backend.
+   2. ``sched_schedule(task)`` reads the task domain, registers it in the TDM
+      domain table if needed, switches backend context to that domain, and
+      delegates task insertion to ``tasks_sched_schedule()``.
+   3. ``sched_elect()`` and ``sched_get_current()`` select the current domain
+      backend context and delegate to ``tasks_sched_elect()`` /
+      ``tasks_sched_get_current()``.
+   4. On each system tick, ``sched_refresh()`` first refreshes the selected
+      domain backend via ``tasks_sched_refresh()``. Then TDM increments its slot
+      counter and, when the window expires, switches to the next domain.
+
+Before rotating to the next domain, TDM calls ``tasks_sched_window_leave()`` so
+that the backend can perform policy-specific bookkeeping at slot boundary.
+
+Backend behavior under TDM
+""""""""""""""""""""""""""
+
+Each backend (FIFO, RRMQ, RMA) implements the private ``tasks_sched_*`` API and
+stores one scheduler context per domain.
+
+Common behavior:
+
+   * domain contexts are created lazily on first use
+   * ``tasks_sched_switch_domain(domain)`` selects the active domain context
+   * if no domain context is selected yet, ``tasks_sched_get_current()`` returns
+     idle
+
+Policy-specific note:
+
+   * FIFO uses ``tasks_sched_window_leave()`` to requeue a preempted ready task
+     at tail, preserving FIFO semantics across TDM slot boundaries
+   * RRMQ and RMA currently use a no-op ``tasks_sched_window_leave()`` because
+     their state progression is naturally handled by local ``elect()/refresh()``
+
+Tick integration
+""""""""""""""""
+
+TDM relies on the same systick path as other preemptive schedulers. The systick
+handler calls ``sched_refresh()`` whenever RRMQ, RMA or TDM is enabled, so slot
+accounting and domain rotations are driven by the kernel tick.
+
+Current limits and tuning guidelines
+""""""""""""""""""""""""""""""""""""
+
+Current implementation characteristics are:
+
+   * one global slot duration shared by all domains
+   * round-robin inter-domain order based on domain discovery order
+   * maximum tracked domains bounded by ``CONFIG_MAX_TASKS``
+   * one global intra-domain policy selected at build time (no per-domain
+     policy mix yet)
+
+.. todo:: Future improvements could include:
+
+   * maximum tracked domains can be calculated using the current task metadata list
+     instead of a fixed upper bound, reducing the memory footprint when few domains are used
+   * per-domain policy selection for heterogeneous workload needs, allowing multiple
+     policies to coexist in the same system
+
+Practical tuning tips:
+
+   * decrease ``CONFIG_SCHED_TDM_WINDOW_TICKS`` for tighter inter-domain
+     responsiveness
+   * increase it to reduce cross-domain switch frequency and preserve longer
+     continuous execution bursts inside each domain
+
+As usual, the best value depends on workload periodicity, syscall blocking
+patterns, and interrupt activity.
