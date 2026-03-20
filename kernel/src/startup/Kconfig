@@ -43,10 +43,30 @@ config SCHED_RMA
 
 endchoice
 
+config SCHED_TDM
+	bool "Enable TDM domain scheduling layer"
+	help
+	  Enable a top-level Time Division Multiplexing (TDM) scheduler that
+	  allocates one dedicated time window per task domain.
+	  The selected scheduling policy above remains the intra-domain policy
+	  (FIFO, RRMQ or RMA).
+
+config SCHED_TDM_WINDOW_TICKS
+	int "TDM shared time window duration (ticks)"
+	depends on SCHED_TDM
+	range 1 1000000
+	default 10
+	help
+	  Duration, in system ticks, of a TDM slot.
+	  This single value is shared by all domains.
+
 config SCHED_NAME
 	string
-	default "RRMQ" if SCHED_RRMQ
-	default "FIFO" if SCHED_FIFO
-	default "RMA"  if SCHED_RMA
+	default "TDM+RRMQ" if SCHED_TDM && SCHED_RRMQ
+	default "TDM+FIFO" if SCHED_TDM && SCHED_FIFO
+	default "TDM+RMA"  if SCHED_TDM && SCHED_RMA
+	default "RRMQ" if !SCHED_TDM && SCHED_RRMQ
+	default "FIFO" if !SCHED_TDM && SCHED_FIFO
+	default "RMA"  if !SCHED_TDM && SCHED_RMA
 
 endmenu

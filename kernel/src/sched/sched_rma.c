@@ -9,6 +9,7 @@
 #include <sentry/managers/debug.h>
 #include <sentry/managers/task.h>
 #include <sentry/sched.h>
+#include "sched_tasks.h"
 
 /**
  * @brief Rate Monotonic Algorithm (RMA) scheduler
@@ -68,12 +69,35 @@ typedef struct sched_rma_context {
     task_rma_state_t *current_job;
 } sched_rma_context_t;
 
+#if CONFIG_SCHED_TDM
+typedef struct sched_rma_domain_ctx {
+    uint8_t domain;
+    bool initialized;
+    sched_rma_context_t ctx;
+} sched_rma_domain_ctx_t;
+
+static sched_rma_domain_ctx_t sched_rma_domains[CONFIG_MAX_TASKS];
+static uint8_t sched_rma_domains_num;
+static sched_rma_context_t *sched_rma_ctx_ref;
+#define sched_rma_ctx (*sched_rma_ctx_ref)
+#else
 static sched_rma_context_t sched_rma_ctx;
+#endif
+
+static inline void sched_rma_context_reset(sched_rma_context_t *ctx)
+{
+    memset(ctx, 0x0, sizeof(sched_rma_context_t));
+}
 
 kstatus_t sched_rma_init(void)
 {
+#if CONFIG_SCHED_TDM
+    if (unlikely(sched_rma_ctx_ref == NULL)) {
+        return K_ERROR_BADSTATE;
+    }
+#endif
     pr_info("initialize RMA scheduler");
-    memset(&sched_rma_ctx, 0x0, sizeof(sched_rma_context_t));
+    sched_rma_context_reset(&sched_rma_ctx);
     return K_STATUS_OKAY;
 }
 
@@ -298,12 +322,77 @@ kstatus_t sched_rma_autotest(void)
 }
 #endif
 
+#if CONFIG_SCHED_TDM
+static kstatus_t sched_rma_switch_domain(uint8_t domain)
+{
+    for (uint8_t i = 0; i < sched_rma_domains_num; ++i) {
+        if (sched_rma_domains[i].initialized && (sched_rma_domains[i].domain == domain)) {
+            sched_rma_ctx_ref = &sched_rma_domains[i].ctx;
+            return K_STATUS_OKAY;
+        }
+    }
+
+    if (unlikely(sched_rma_domains_num >= CONFIG_MAX_TASKS)) {
+        return K_SECURITY_INVSTATE;
+    }
+
+    sched_rma_domains[sched_rma_domains_num].domain = domain;
+    sched_rma_domains[sched_rma_domains_num].initialized = true;
+    sched_rma_context_reset(&sched_rma_domains[sched_rma_domains_num].ctx);
+    sched_rma_ctx_ref = &sched_rma_domains[sched_rma_domains_num].ctx;
+    sched_rma_domains_num++;
+    return K_STATUS_OKAY;
+}
+
+kstatus_t tasks_sched_init(void)
+{
+    memset(sched_rma_domains, 0x0, sizeof(sched_rma_domains));
+    sched_rma_domains_num = 0;
+    sched_rma_ctx_ref = NULL;
+    return K_STATUS_OKAY;
+}
+
+kstatus_t tasks_sched_switch_domain(uint8_t domain)
+{
+    return sched_rma_switch_domain(domain);
+}
+
+kstatus_t tasks_sched_schedule(taskh_t t)
+{
+    return sched_rma_schedule(t);
+}
+
+taskh_t tasks_sched_elect(void)
+{
+    return sched_rma_elect();
+}
+
+taskh_t tasks_sched_get_current(void)
+{
+    if (unlikely(sched_rma_ctx_ref == NULL)) {
+        return mgr_task_get_idle();
+    }
+    return sched_rma_get_current();
+}
+
+stack_frame_t *tasks_sched_refresh(stack_frame_t *frame)
+{
+    return sched_rma_refresh(frame);
+}
+
+void tasks_sched_window_leave(void)
+{
+    /* RMA state is naturally handled at next local elect() in this domain. */
+}
+#endif
+
 /*
  * Public API aliases — the single scheduler model selects exactly one
  * implementation at build time through Kconfig; these aliases bind the generic
  * sched_* symbols to the RMA-specific implementations when CONFIG_SCHED_RMA
  * is active.
  */
+#if !CONFIG_SCHED_TDM
 kstatus_t sched_schedule(taskh_t t) __attribute__((alias("sched_rma_schedule")));
 taskh_t sched_elect(void) __attribute__((alias("sched_rma_elect")));
 taskh_t sched_get_current(void) __attribute__((alias("sched_rma_get_current")));
@@ -311,4 +400,5 @@ kstatus_t sched_init(void) __attribute__((alias("sched_rma_init")));
 stack_frame_t *sched_refresh(stack_frame_t *frame) __attribute__((alias("sched_rma_refresh")));
 #ifdef CONFIG_BUILD_TARGET_AUTOTEST
 kstatus_t sched_autotest(void) __attribute__((alias("sched_rma_autotest")));
+#endif
 #endif

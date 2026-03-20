@@ -89,7 +89,7 @@ stack_frame_t *systick_handler(stack_frame_t * stack_frame)
 
   systime_get_cycle();
 
-#if CONFIG_SCHED_RRMQ
+#if CONFIG_SCHED_RRMQ || CONFIG_SCHED_RMA || CONFIG_SCHED_TDM
   /* refresh quantums */
   stack_frame = sched_refresh(stack_frame);
 #endif

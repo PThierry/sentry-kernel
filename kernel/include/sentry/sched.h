@@ -57,7 +57,7 @@ taskh_t sched_elect(void);
  */
 taskh_t sched_get_current(void);
 
-#if defined(CONFIG_SCHED_RRMQ) || defined(CONFIG_SCHED_RMA)
+#if CONFIG_SCHED_RRMQ || CONFIG_SCHED_RMA || CONFIG_SCHED_TDM
 /**
  * @brief refresh scheduler state on each HW tick, may generate election
  */

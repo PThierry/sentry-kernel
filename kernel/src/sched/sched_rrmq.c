@@ -9,6 +9,7 @@
 #include <sentry/managers/debug.h>
 #include <sentry/managers/task.h>
 #include <sentry/sched.h>
+#include "sched_tasks.h"
 
 /**
  * @def RRMQ task context for a given task
@@ -74,11 +75,31 @@ typedef struct sched_rrmq_context {
     task_rrmq_state_t    *current_job;     /**< current task that is being executed, or idle */
  } sched_rrmq_context_t;
 
+#if CONFIG_SCHED_TDM
+typedef struct sched_rrmq_domain_ctx {
+    uint8_t domain;
+    bool initialized;
+    sched_rrmq_context_t ctx;
+} sched_rrmq_domain_ctx_t;
+
+static sched_rrmq_domain_ctx_t sched_rrmq_domains[CONFIG_MAX_TASKS];
+static uint8_t sched_rrmq_domains_num;
+static sched_rrmq_context_t *sched_rrmq_ctx_ref;
+#define sched_rrmq_ctx (*sched_rrmq_ctx_ref)
+#else
 static sched_rrmq_context_t
 #ifndef __FRAMAC__
 _Alignas(uint32_t)
 #endif
 sched_rrmq_ctx;
+#endif
+
+static inline void sched_rrmq_context_reset(sched_rrmq_context_t *ctx)
+{
+    memset(ctx, 0x0, sizeof(sched_rrmq_context_t));
+    ctx->active_jobset = &ctx->primary;
+    ctx->backed_jobset = &ctx->secondary;
+}
 
 /**
  * Swapping current timeslot job set and backed job set. This happen when current
@@ -99,11 +120,14 @@ static inline void sched_swap_tables(void)
 
 kstatus_t sched_rrmq_init(void)
 {
+#if CONFIG_SCHED_TDM
+    if (unlikely(sched_rrmq_ctx_ref == NULL)) {
+        return K_ERROR_BADSTATE;
+    }
+#endif
     pr_info("initialize RRMQ scheduler");
-    memset(&sched_rrmq_ctx, 0x0, sizeof(sched_rrmq_context_t));
+    sched_rrmq_context_reset(&sched_rrmq_ctx);
     pr_info("clear delay job list");
-    sched_rrmq_ctx.active_jobset = &sched_rrmq_ctx.primary;
-    sched_rrmq_ctx.backed_jobset = &sched_rrmq_ctx.secondary;
     return K_STATUS_OKAY;
 }
 
@@ -294,9 +318,73 @@ kstatus_t sched_rrmq_autotest(void)
 }
 #endif
 
+#if CONFIG_SCHED_TDM
+static kstatus_t sched_rrmq_switch_domain(uint8_t domain)
+{
+    for (uint8_t i = 0; i < sched_rrmq_domains_num; ++i) {
+        if (sched_rrmq_domains[i].initialized && (sched_rrmq_domains[i].domain == domain)) {
+            sched_rrmq_ctx_ref = &sched_rrmq_domains[i].ctx;
+            return K_STATUS_OKAY;
+        }
+    }
+
+    if (unlikely(sched_rrmq_domains_num >= CONFIG_MAX_TASKS)) {
+        return K_SECURITY_INVSTATE;
+    }
+
+    sched_rrmq_domains[sched_rrmq_domains_num].domain = domain;
+    sched_rrmq_domains[sched_rrmq_domains_num].initialized = true;
+    sched_rrmq_context_reset(&sched_rrmq_domains[sched_rrmq_domains_num].ctx);
+    sched_rrmq_ctx_ref = &sched_rrmq_domains[sched_rrmq_domains_num].ctx;
+    sched_rrmq_domains_num++;
+    return K_STATUS_OKAY;
+}
+
+kstatus_t tasks_sched_init(void)
+{
+    memset(sched_rrmq_domains, 0x0, sizeof(sched_rrmq_domains));
+    sched_rrmq_domains_num = 0;
+    sched_rrmq_ctx_ref = NULL;
+    return K_STATUS_OKAY;
+}
+
+kstatus_t tasks_sched_switch_domain(uint8_t domain)
+{
+    return sched_rrmq_switch_domain(domain);
+}
+
+kstatus_t tasks_sched_schedule(taskh_t t)
+{
+    return sched_rrmq_schedule(t);
+}
+
+taskh_t tasks_sched_elect(void)
+{
+    return sched_rrmq_elect();
+}
+
+taskh_t tasks_sched_get_current(void)
+{
+    if (unlikely(sched_rrmq_ctx_ref == NULL)) {
+        return mgr_task_get_idle();
+    }
+    return sched_rrmq_get_current();
+}
+
+stack_frame_t *tasks_sched_refresh(stack_frame_t *frame)
+{
+    return sched_rrmq_refresh(frame);
+}
+
+void tasks_sched_window_leave(void)
+{
+    /* RRMQ state is naturally handled at next local elect() in this domain. */
+}
+#endif
+
 
 /* default scheduler is RRMQ */
-
+#if !CONFIG_SCHED_TDM
 kstatus_t sched_schedule(taskh_t t) __attribute__((alias("sched_rrmq_schedule")));
 taskh_t sched_elect(void) __attribute__((alias("sched_rrmq_elect")));
 taskh_t sched_get_current(void) __attribute__((alias("sched_rrmq_get_current")));
@@ -304,4 +392,5 @@ kstatus_t sched_init(void) __attribute__((alias("sched_rrmq_init")));
 stack_frame_t *sched_refresh(stack_frame_t *frame) __attribute__((alias("sched_rrmq_refresh")));
 #ifdef CONFIG_BUILD_TARGET_AUTOTEST
 kstatus_t sched_autotest(void) __attribute__((alias("sched_rrmq_autotest")));
+#endif
 #endif
