@@ -52,12 +52,9 @@ int main(int argc, char *argv[])
         auto meta = taskMetadata::from_json(data["task_meta"]);
 
         std::array<uint8_t, SHA256_DIGEST_LENGTH> sha256{};
-        if (!meta.set_u8_array_field("metadata_sha256", sha256)) {
-            throw std::runtime_error("metadata_sha256 field not found or has unexpected type");
-        }
-
         auto blob = reflect::to_bytes<arch::memory_spec>(meta);
-        if (SHA256(reinterpret_cast<const unsigned char*>(blob.data()), blob.size(), sha256.data()) == nullptr) {
+        const auto hashed_blob_size = blob.size() - sha256.size();
+        if (SHA256(reinterpret_cast<const unsigned char*>(blob.data()), hashed_blob_size, sha256.data()) == nullptr) {
             throw std::runtime_error("failed to compute metadata_sha256");
         }
 

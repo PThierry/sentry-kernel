@@ -125,11 +125,6 @@ end:
     return status;
 }
 
-#if CONFIG_SECU_METADATA_SHA256_CHECK
-/* TODO: dev, shm and dma list should be removed from metadata, replaced by dts only info, fixing metadata size definitively */
-static_assert(sizeof(task_meta_t) <= 200, "beware that the task_meta_t structure may be too big to be copied on stack!");
-#endif
-
 /**
  * @brief check_meta_integrity state handling
  *
@@ -158,7 +153,8 @@ static inline kstatus_t task_init_check_meta_integrity(task_meta_t const * const
 
     (void)memset(meta_copy.metadata_sha256, 0x0, sizeof(meta_copy.metadata_sha256));
 
-    if (sha256((const uint8_t *)&meta_copy, sizeof(meta_copy), digest) != 0) {
+    /* recalculate the sha256 of the metadata. the metadata_sha256 is not a part of the calculation */
+    if (sha256((const uint8_t *)meta, offsetof(task_meta_t, metadata_sha256), digest) != 0) {
         pr_err("[task %08x] metadata sha256 computation failed", meta->label);
         ctx.state = TASK_MANAGER_STATE_ERROR_SECURITY;
         goto end;
