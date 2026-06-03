@@ -166,3 +166,23 @@ exit(0)
 subdir('proof_entrypoint')
 subdir('proof_handlers')
 subdir('proof_composition')
+
+# Manual target to aggregate Frama-C coverage traces and export gcovr JSON.
+# This is intentionally not built by default and must be invoked explicitly.
+framac_gcovr_coverage = custom_target(
+  'framac_gcovr_coverage',
+  command: [
+    py3,
+    join_paths(meson.project_source_root(), 'tools', 'framac_coverage_to_gcovr.py'),
+    '--repo-root', meson.project_source_root(),
+    '--compile-commands', join_paths(meson.project_build_root(), 'compile_commands.json'),
+    '--coverage-glob', 'builddir*/kernel/proof/**/*-coverage.json',
+    '--output', '@OUTPUT0@',
+    '--summary-output', '@OUTPUT1@',
+  ],
+  output: [
+    'frama-c-kernel-function-coverage.gcovr.json',
+    'frama-c-kernel-function-coverage.gcovr.summary.json',
+  ],
+  build_by_default: false,
+)
