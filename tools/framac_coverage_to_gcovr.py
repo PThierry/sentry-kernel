@@ -20,6 +20,7 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 import re
@@ -70,6 +71,33 @@ def parse_args() -> argparse.Namespace:
         "--ctags",
         default="ctags",
         help="ctags executable to use (default: ctags)",
+    )
+    parser.add_argument(
+        "--gcovr",
+        default="gcovr",
+        help="gcovr executable to use for optional exports (default: gcovr)",
+    )
+    parser.add_argument(
+        "--export-html",
+        action="store_true",
+        help="Export an HTML report from the generated gcovr JSON",
+    )
+    parser.add_argument(
+        "--html-output",
+        default=None,
+        help=(
+            "HTML output path (default: <main output stem>-html/index.html in the same directory)"
+        ),
+    )
+    parser.add_argument(
+        "--export-sonarqube",
+        action="store_true",
+        help="Export a SonarQube XML report from the generated gcovr JSON",
+    )
+    parser.add_argument(
+        "--sonarqube-output",
+        default=None,
+        help="SonarQube output path (default: main output with '.sonarqube.xml' suffix)",
     )
     return parser.parse_args()
 
@@ -366,6 +394,75 @@ def build_gcovr_summary(report: dict) -> dict:
     }
 
 
+def run_gcovr_export(
+    gcovr_bin: str,
+    repo_root: Path,
+    trace_json: Path,
+    mode: str,
+    output_file: Path,
+) -> None:
+    def make_command(trace_file: Path) -> List[str]:
+        base = [
+            gcovr_bin,
+            "-r",
+            str(repo_root),
+            "--json-add-tracefile",
+            str(trace_file),
+            "--merge-mode-functions=merge-use-line-min",
+        ]
+        if mode == "html":
+            return base + ["--html-details", "-o", str(output_file)]
+        if mode == "sonarqube":
+            return base + ["--sonarqube", "-o", str(output_file)]
+        raise ValueError(f"unsupported gcovr export mode: {mode}")
+
+    def run_command(command: List[str]) -> None:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+
+    try:
+        run_command(make_command(trace_json))
+        return
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"gcovr executable not found: {gcovr_bin}") from exc
+    except subprocess.CalledProcessError as first_exc:
+        first_stderr = first_exc.stderr.strip() if first_exc.stderr else "unknown gcovr error"
+
+    # Compatibility fallback for older gcovr versions that require JSON trace
+    # format 0.6 and function field returned_count.
+    try:
+        with trace_json.open("r", encoding="utf-8") as handle:
+            trace_payload = json.load(handle)
+
+        trace_payload["gcovr/format_version"] = "0.6"
+        for file_entry in trace_payload.get("files", []):
+            for function_entry in file_entry.get("functions", []):
+                function_entry.setdefault(
+                    "returned_count", int(function_entry.get("execution_count", 0))
+                )
+
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".gcovr.json",
+            delete=False,
+            encoding="utf-8",
+        ) as tmp:
+            json.dump(trace_payload, tmp)
+            tmp.write("\n")
+            legacy_trace_path = Path(tmp.name)
+
+        try:
+            run_command(make_command(legacy_trace_path))
+            return
+        finally:
+            legacy_trace_path.unlink(missing_ok=True)
+    except subprocess.CalledProcessError as second_exc:
+        second_stderr = second_exc.stderr.strip() if second_exc.stderr else "unknown gcovr error"
+        raise RuntimeError(
+            f"gcovr {mode} export failed. first attempt: {first_stderr}; "
+            f"legacy fallback: {second_stderr}"
+        ) from second_exc
+
+
 def main() -> int:
     args = parse_args()
 
@@ -376,6 +473,16 @@ def main() -> int:
         (repo_root / args.summary_output).resolve()
         if args.summary_output
         else output_path.with_name(f"{output_path.stem}.summary.json")
+    )
+    html_output_path = (
+        (repo_root / args.html_output).resolve()
+        if args.html_output
+        else output_path.parent / f"{output_path.stem}-html" / "index.html"
+    )
+    sonarqube_output_path = (
+        (repo_root / args.sonarqube_output).resolve()
+        if args.sonarqube_output
+        else output_path.with_name(f"{output_path.stem}.sonarqube.xml")
     )
 
     if not compile_commands.exists():
@@ -411,6 +518,26 @@ def main() -> int:
         json.dump(summary, handle, indent=2, sort_keys=False)
         handle.write("\n")
 
+    if args.export_html:
+        html_output_path.parent.mkdir(parents=True, exist_ok=True)
+        run_gcovr_export(
+            gcovr_bin=args.gcovr,
+            repo_root=repo_root,
+            trace_json=output_path,
+            mode="html",
+            output_file=html_output_path,
+        )
+
+    if args.export_sonarqube:
+        sonarqube_output_path.parent.mkdir(parents=True, exist_ok=True)
+        run_gcovr_export(
+            gcovr_bin=args.gcovr,
+            repo_root=repo_root,
+            trace_json=output_path,
+            mode="sonarqube",
+            output_file=sonarqube_output_path,
+        )
+
     covered = sum(
         1
         for file_entry in report["files"]
@@ -423,6 +550,10 @@ def main() -> int:
     print(f"function coverage: {covered}/{total}")
     print(f"written: {output_path}")
     print(f"summary written: {summary_path}")
+    if args.export_html:
+        print(f"html written: {html_output_path}")
+    if args.export_sonarqube:
+        print(f"sonarqube written: {sonarqube_output_path}")
     return 0
 
 

@@ -177,12 +177,16 @@ framac_gcovr_coverage = custom_target(
     '--repo-root', meson.project_source_root(),
     '--compile-commands', join_paths(meson.project_build_root(), 'compile_commands.json'),
     '--coverage-glob', 'builddir*/kernel/proof/**/*-coverage.json',
+    '--export-html',
+    '--export-sonarqube',
     '--output', '@OUTPUT0@',
     '--summary-output', '@OUTPUT1@',
   ],
   output: [
     'frama-c-kernel-function-coverage.gcovr.json',
     'frama-c-kernel-function-coverage.gcovr.summary.json',
+    'frama-c-kernel-function-coverage.gcovr-html/index.html',
+    'frama-c-kernel-function-coverage.gcovr.sonarqube.xml',
   ],
   build_by_default: false,
 )
