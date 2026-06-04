@@ -254,8 +254,8 @@ kstatus_t task_do_initiate_localinfo(task_meta_t const * const meta, task_t *tas
      */
     task_ctx->sp = mgr_task_initialize_sp(0UL, stack_top, (meta->s_text + meta->entrypoint_offset), meta->s_got);
 #endif
-    if (unlikely(stack_top > meta->stack_size)) {
-        pr_err("security invalid stack size, stack top is above stack bottom");
+    if (unlikely(stack_top < meta->stack_size)) {
+        pr_err("security invalid stack size, not mappable   ");
         panic(PANIC_CONFIGURATION_MISMATCH);
     }
     task_ctx->stack_limit = stack_top - meta->stack_size;

@@ -91,8 +91,17 @@ size_t mgr_task_get_text_region_size(const task_meta_t *meta)
 }
 
 /*@
-    requires \valid(stack_limit);
-    assigns *stack_limit;
+   assigns \nothing;
+
+   behavior ok:
+     assumes stack_limit != \null;
+     assigns *stack_limit;
+   behavior err:
+     assumes stack_limit == \null;
+     assigns \nothing;
+
+   complete behaviors;
+   disjoint behaviors;
 */
 kstatus_t mgr_task_get_stack_size(const taskh_t h, size_t* stack_limit)
 {
