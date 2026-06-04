@@ -26,3 +26,7 @@ bsp_private_gen_source_set.add(when: 'CONFIG_SOC_SUBFAMILY_STM32U5', if_true: [ 
 bsp_private_gen_source_set.add(when: 'CONFIG_SOC_SUBFAMILY_STM32U5', if_true: files('stm32u5-gpdma.c'))
 
 # driver source selection
+
+if kconfig_data.get('CONFIG_SOC_SUBFAMILY_RP2350', 0) == 1
+subdir('rp2350')
+endif

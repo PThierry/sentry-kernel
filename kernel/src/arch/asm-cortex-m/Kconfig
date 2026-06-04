@@ -87,6 +87,10 @@ config SOC_FAMILY_STM32
 	bool
 	select LITTLE_ENDIAN
 
+config SOC_FAMILY_RP2
+	bool
+	select LITTLE_ENDIAN
+
 config SOC_SUBFAMILY_STM32F4
 	bool
 	select ARCH_ARM_CORTEX_M4
@@ -177,6 +181,14 @@ config SOC_SUBFAMILY_STM32U5F_Gx
 	bool
 	select SOC_SUBFAMILY_STM32U5
 
+config SOC_SUBFAMILY_RP2350
+	bool
+	select ARCH_ARM_CORTEX_M33
+	select SOC_FAMILY_RP2
+	select HAS_SIO
+	help
+	  RP2350 family is based on Cortex-M33 with SMP support.
+
 config ARCH_ARM_CORTEX_NAME
 	string
 	default "m3" if ARCH_ARM_CORTEX_M3
@@ -205,6 +217,7 @@ config ARCH_SOCNAME
 	default "STM32U5A9" if ARCH_MCU_STM32U5A9
 	default "STM32U5FX" if ARCH_MCU_STM32U5FX
 	default "STM32U5GX" if ARCH_MCU_STM32U5GX
+	default "RP2350" if ARCH_MCU_RP2350
 
 # User-accessible selectors
 
@@ -251,6 +264,10 @@ config ARCH_MCU_STM32U5A5
 config ARCH_MCU_STM32U5A9
 	bool "STM32U5A9"
 	select SOC_SUBFAMILY_STM32U59_Ax
+
+config ARCH_MCU_RP2350
+	bool "RP2350"
+	select SOC_SUBFAMILY_RP2350
 
 endchoice
 

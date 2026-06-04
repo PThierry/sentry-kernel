@@ -45,6 +45,10 @@ if kconfig_data.get('CONFIG_WITH_SMP_SUPPORT', 0) == 1
 subdir('smp')
 endif
 
+if kconfig_data.get('CONFIG_SOC_SUBFAMILY_RP2350', 0) == 1
+subdir('sysinfo')
+endif
+
 bsp_source_set_config = bsp_source_set.apply(kconfig_data, strict: false)
 bsp_private_gen_source_set_config = bsp_private_gen_source_set.apply(kconfig_data, strict: false)
 bsp_private_gen_header_set_config = bsp_private_gen_header_set.apply(kconfig_data, strict: false)
