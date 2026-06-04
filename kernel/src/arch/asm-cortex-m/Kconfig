@@ -90,6 +90,9 @@ config SOC_FAMILY_STM32
 config SOC_FAMILY_RP2
 	bool
 	select LITTLE_ENDIAN
+	select HAS_FPU
+	select HAS_FPU_VFPV4
+	select HAS_MPU_PMSA_V8
 
 config SOC_SUBFAMILY_STM32F4
 	bool
@@ -185,7 +188,6 @@ config SOC_SUBFAMILY_RP2350
 	bool
 	select ARCH_ARM_CORTEX_M33
 	select SOC_FAMILY_RP2
-	select HAS_SIO
 	help
 	  RP2350 family is based on Cortex-M33 with SMP support.
 
@@ -314,6 +316,7 @@ config FPU_ABI_CFLAGS
 	default "-mfloat-abi=soft" if FPU_SOFT_ABI
 	default "-mfloat-abi=softfp" if FPU_SOFTFP_ABI
 	default "-mfloat-abi=hard" if FPU_HARDFP_ABI
+
 
 config FPU_CFLAGS
 	string

@@ -7,7 +7,6 @@
 /dts-v1/;
 
 #include <rpi/pico/rp2350.dtsi>
-#include <sentry.dtsi>
 
 / {
 	chosen {

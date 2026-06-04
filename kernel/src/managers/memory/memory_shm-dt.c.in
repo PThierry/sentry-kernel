@@ -12,7 +12,7 @@
 {% set ns = namespace() -%}
 {% set ns.total_shm=0 -%}
 static const shm_meta_t shms[] = {
-    {% for node in dts.get_mappable() -%}
+    {% for node in dts.get_compatible("sentry,memory-pool") -%}
     {% if node|has_property("sentry,shm") -%}
     /* {{ node.label }} */
     {
