@@ -90,6 +90,28 @@ size_t mgr_task_get_text_region_size(const task_meta_t *meta)
     /* got and data in flash are excluded (no need) */
 }
 
+/*@
+    requires \valid(stack_limit);
+    assigns *stack_limit;
+*/
+kstatus_t mgr_task_get_stack_size(const taskh_t h, size_t* stack_limit)
+{
+    kstatus_t status = K_ERROR_INVPARAM;
+    task_t *tsk = task_get_from_handle(h);
+    if (unlikely(tsk == NULL)) {
+        pr_err("invalid task handle!");
+        goto err;
+    }
+    if (unlikely(stack_limit == NULL)) {
+        pr_err("invalid stack limit pointer!");
+        goto err;
+    }
+    *stack_limit = tsk->stack_limit;
+    status = K_STATUS_OKAY;
+err:
+    return status;
+}
+
 void task_dump_table(void)
 {
 #ifndef CONFIG_BUILD_TARGET_RELEASE
