@@ -12,6 +12,9 @@ kstatus_t pwr_probe(void)
 
 kstatus_t pwr_set_voltage_regulator_scaling(uint8_t scale)
 {
-    (void)scale;
+    /* RP2350 has no software-controlled voltage scaling in this driver path. */
+    if (unlikely(scale != 0u)) {
+        return K_ERROR_INVPARAM;
+    }
     return K_STATUS_OKAY;
 }
