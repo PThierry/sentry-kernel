@@ -90,8 +90,20 @@
 
 &uart0 {
 	status = "okay";
+	pinctrl-0 = <&uart0_tx>, <&uart0_rx>;
 };
 
 &gpio0 {
-	status = "disabled";
+	status = "okay";
+};
+
+&pinctrl {
+	uart0_tx: uart0-tx {
+		pinmux = <&gpio0 0 RP2350_IO_FUNC_UART>;
+		pincfg = <RPINCTRL_CONFIG(RP2350_IO_FUNC_UART, 0, 0)>;
+	};
+	uart0_rx: uart0-rx {
+		pinmux = <&gpio0 1 RP2350_IO_FUNC_UART>;
+		pincfg = <RPINCTRL_CONFIG(RP2350_IO_FUNC_UART, 0, 1)>;
+	};
 };
