@@ -76,6 +76,10 @@
 	};
 };
 
+&cpu1 {
+	status = "disabled";
+};
+
 &flash0 {
 	reg = <0x10000000 DT_SIZE_M(4)>;
 };
@@ -86,10 +90,6 @@
 
 &uart0 {
 	status = "okay";
-};
-
-&cpu1 {
-	status = "disabled";
 };
 
 &gpio0 {
